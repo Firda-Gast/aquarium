@@ -15,6 +15,12 @@ public class FishFactory : MonoBehaviour
              "dit materiaal laat Unity de shader weg en worden de vissen roze.")]
     public Material fishMaterial;
 
+    [Tooltip("Unity's ingebouwde Sphere-mesh. Door hem hier te koppelen komt hij zeker mee in de build.")]
+    public Mesh sphereMesh;
+
+    [Tooltip("Unity's ingebouwde Cube-mesh. Door hem hier te koppelen komt hij zeker mee in de build.")]
+    public Mesh cubeMesh;
+
     public List<GameObject> fishList;
 
     private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
@@ -114,9 +120,10 @@ public class FishFactory : MonoBehaviour
     private void AddPart(GameObject fish, PrimitiveType shape, string partName,
                          Vector3 position, Vector3 scale, Vector3 rotation, Color color)
     {
-        // Zelf opbouwen in plaats van GameObject.CreatePrimitive: die voegt altijd een collider toe
-        // (SphereCollider, BoxCollider). De vissen botsen nergens tegenaan, dus die is niet nodig,
-        // en in de WebGL-build zit geen physics-module, waardoor CreatePrimitive een foutmelding gaf.
+        // Zelf opbouwen in plaats van GameObject.CreatePrimitive: die voegt altijd een collider toe.
+        // De vissen botsen nergens tegenaan, dus die is niet nodig. Bovendien haalt 'Strip Engine Code'
+        // SphereCollider uit de WebGL-build (de scène gebruikt alleen BoxColliders), waardoor
+        // CreatePrimitive(Sphere) daar een foutmelding gaf.
         GameObject part = new GameObject(partName, typeof(MeshFilter), typeof(MeshRenderer));
         part.GetComponent<MeshFilter>().sharedMesh = GetMesh(shape);
         part.transform.SetParent(fish.transform, false);
@@ -138,23 +145,14 @@ public class FishFactory : MonoBehaviour
         partRenderer.SetPropertyBlock(block);
     }
 
-    // De vorm (bol of kubus) van Unity zelf, één keer opgehaald en daarna hergebruikt.
-    private static readonly Dictionary<PrimitiveType, Mesh> meshes = new Dictionary<PrimitiveType, Mesh>();
-
-    private static Mesh GetMesh(PrimitiveType shape)
+    // De vorm (bol of kubus). Komt uit de velden Sphere Mesh en Cube Mesh in de Inspector:
+    // alleen meshes waar de scène naar verwijst, gaan zeker mee in de WebGL-build.
+    // (Resources.GetBuiltinResource werkt in de editor wel, maar in de build niet betrouwbaar.)
+    private Mesh GetMesh(PrimitiveType shape)
     {
-        if (meshes.TryGetValue(shape, out Mesh mesh))
-            return mesh;
-
-        mesh = Resources.GetBuiltinResource<Mesh>(shape + ".fbx"); // "Sphere.fbx", "Cube.fbx"
+        Mesh mesh = shape == PrimitiveType.Cube ? cubeMesh : sphereMesh;
         if (mesh == null)
-        {
-            // Reserve: eenmalig een primitive maken en alleen de vorm overnemen.
-            GameObject temp = GameObject.CreatePrimitive(shape);
-            mesh = temp.GetComponent<MeshFilter>().sharedMesh;
-            Destroy(temp);
-        }
-        meshes[shape] = mesh;
+            Debug.LogWarning($"FishFactory: vul het veld '{shape} Mesh' in de Inspector.");
         return mesh;
     }
 

@@ -571,6 +571,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::FishFactory
   tank: {fileID: 1768054593}
   fishMaterial: {fileID: 2100000, guid: fb9eef4fd382f4443ac55d5b5f306052, type: 2}
+  sphereMesh: {fileID: 0}
+  cubeMesh: {fileID: 0}
   fishList: []
 --- !u!1 &1300356180
 GameObject:
