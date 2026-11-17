@@ -114,9 +114,11 @@ public class FishFactory : MonoBehaviour
     private void AddPart(GameObject fish, PrimitiveType shape, string partName,
                          Vector3 position, Vector3 scale, Vector3 rotation, Color color)
     {
-        GameObject part = GameObject.CreatePrimitive(shape);
-        part.name = partName;
-        Destroy(part.GetComponent<Collider>()); // vissen hoeven nergens tegenaan te botsen
+        // Zelf opbouwen in plaats van GameObject.CreatePrimitive: die voegt altijd een collider toe
+        // (SphereCollider, BoxCollider). De vissen botsen nergens tegenaan, dus die is niet nodig,
+        // en in de WebGL-build zit geen physics-module, waardoor CreatePrimitive een foutmelding gaf.
+        GameObject part = new GameObject(partName, typeof(MeshFilter), typeof(MeshRenderer));
+        part.GetComponent<MeshFilter>().sharedMesh = GetMesh(shape);
         part.transform.SetParent(fish.transform, false);
         part.transform.localPosition = position;
         part.transform.localScale = scale;
@@ -134,6 +136,26 @@ public class FishFactory : MonoBehaviour
         var block = new MaterialPropertyBlock();
         block.SetColor(BaseColorId, color);
         partRenderer.SetPropertyBlock(block);
+    }
+
+    // De vorm (bol of kubus) van Unity zelf, één keer opgehaald en daarna hergebruikt.
+    private static readonly Dictionary<PrimitiveType, Mesh> meshes = new Dictionary<PrimitiveType, Mesh>();
+
+    private static Mesh GetMesh(PrimitiveType shape)
+    {
+        if (meshes.TryGetValue(shape, out Mesh mesh))
+            return mesh;
+
+        mesh = Resources.GetBuiltinResource<Mesh>(shape + ".fbx"); // "Sphere.fbx", "Cube.fbx"
+        if (mesh == null)
+        {
+            // Reserve: eenmalig een primitive maken en alleen de vorm overnemen.
+            GameObject temp = GameObject.CreatePrimitive(shape);
+            mesh = temp.GetComponent<MeshFilter>().sharedMesh;
+            Destroy(temp);
+        }
+        meshes[shape] = mesh;
+        return mesh;
     }
 
     private Color ParseColor(string hex, string fishId)

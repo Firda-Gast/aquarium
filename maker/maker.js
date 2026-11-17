@@ -214,17 +214,93 @@ async function randomFish() {
 
 }
 
-function downloadFish() {
-  const fish = makeFish();
+// ---------- Scheldwoorden ----------
+// In ../shared/scheldwoorden.json staan alleen hashes van de woorden, niet de woorden zelf.
+// Deze controle werkt precies zoals tools/scheldwoorden.py.
+let badWords = { heel: new Set(), overal: new Set() };
+
+async function loadBadWords() {
+  try {
+    const response = await fetch("../shared/scheldwoorden.json");
+    const data = await response.json();
+    badWords = { heel: new Set(data.heel), overal: new Set(data.overal) };
+  } catch (error) {
+    // Geen lijst: dan controleert alleen de automatische controle bij de pull request.
+  }
+}
+
+// Kleine letters, zonder accenten; 0 wordt o, 1 wordt i, enz.; al het andere wordt een spatie.
+function simplify(text) {
+  const from = "013457@$", to = "oieastas";
+  return text.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/[013457@$]/g, (char) => to[from.indexOf(char)])
+    .replace(/[^a-z]/g, " ").split(" ").filter(Boolean).join(" ");
+}
+
+async function wordHash(text) {
+  const bytes = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return [...new Uint8Array(bytes)].map((b) => b.toString(16).padStart(2, "0")).join("").slice(0, 16);
+}
+
+async function containsBadWord(text) {
+  if (!window.crypto || !crypto.subtle) return false;
+  const parts = simplify(text).split(" ").filter(Boolean);
+  for (let start = 0; start < parts.length; start++) {
+    for (let end = start + 1; end <= Math.min(start + 6, parts.length); end++) {
+      if (badWords.heel.has(await wordHash(parts.slice(start, end).join(" ")))) return true;
+    }
+  }
+  const glued = parts.join("");
+  if (glued && badWords.heel.has(await wordHash(glued))) return true;
+  for (let start = 0; start < glued.length; start++) {
+    for (let end = start + 3; end <= glued.length; end++) {
+      if (badWords.overal.has(await wordHash(glued.slice(start, end)))) return true;
+    }
+  }
+  return false;
+}
+
+// Controleert naam en maker. Geeft de id terug, of null (met een melding) als het niet klopt.
+async function checkNames(fish) {
   const id = makeId(fish.name);
   if (fish.name === "" || fish.maker === "") {
     message.textContent = "Vul eerst de naam van je vis en je eigen naam in.";
-    return;
+    return null;
   }
   if (id === "") {
     message.textContent = "De naam van je vis bestaat alleen uit vreemde tekens. Gebruik ook letters of cijfers.";
-    return;
+    return null;
   }
+  if (await containsBadWord(fish.name) || await containsBadWord(fish.maker)) {
+    message.textContent = "Deze naam is niet toegestaan. Kies een andere naam.";
+    return null;
+  }
+  return id;
+}
+
+// De repository waar de vissen in staan.
+const REPO = "https://github.com/Firda-Software-Development-Drachten/aquarium";
+
+// Opent GitHub met een nieuw bestand fish/<id>.json dat al is ingevuld.
+// Heb je geen schrijfrechten (zoals de meeste studenten en het open-dagaccount),
+// dan maakt GitHub zelf een fork en een branch, en kun je daarna een pull request openen.
+async function sendFish() {
+  const fish = makeFish();
+  const id = await checkNames(fish);
+  if (id === null) return;
+  const params = new URLSearchParams({
+    filename: id + ".json",
+    value: output.textContent + "\n",
+    message: "Voeg vis " + fish.name + " toe",
+  });
+  window.open(REPO + "/new/main/fish?" + params.toString(), "_blank", "noopener");
+  message.textContent = "GitHub is geopend in een nieuw tabblad. Volg daar de stappen hieronder.";
+}
+
+async function downloadFish() {
+  const fish = makeFish();
+  const id = await checkNames(fish);
+  if (id === null) return;
   const file = new Blob([output.textContent + "\n"], { type: "application/json" });
   const link = document.createElement("a");
   link.href = URL.createObjectURL(file);
@@ -238,8 +314,10 @@ form.addEventListener("input", showFish);
 document.querySelector("#copy-button").addEventListener("click", copyFish);
 document.querySelector("#download-button").addEventListener("click", downloadFish);
 document.querySelector("#random-button").addEventListener("click", randomFish);
+document.querySelector("#github-button").addEventListener("click", sendFish);
 
 // Eerst keuzes inladen
+loadBadWords();
 loadOptions().then(() => {
   loadFromUrl();
   showFish();

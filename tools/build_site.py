@@ -95,6 +95,9 @@ def main():
     # zowel in de repo als op de site.
     (SITE_DIR / "shared").mkdir()
     shutil.copy(OPTIONS_FILE, SITE_DIR / "shared" / "options.json")
+    # De Vissenmaker controleert ook op scheldwoorden (alleen hashes, zie tools/scheldwoorden.py).
+    if (ROOT / "shared" / "scheldwoorden.json").exists():
+        shutil.copy(ROOT / "shared" / "scheldwoorden.json", SITE_DIR / "shared" / "scheldwoorden.json")
 
     if MAKER_DIR.is_dir():
         copy_folder_contents(MAKER_DIR, SITE_DIR / "maker")
